@@ -275,6 +275,26 @@ func init() {
 					return nil, nil
 				},
 			},
+			"isDeprecated": &Field{
+				Type: NewNonNull(Boolean),
+				Resolve: func(p ResolveParams) (interface{}, error) {
+					if field, ok := p.Source.(*FieldDefinition); ok {
+						return (field.DeprecationReason != ""), nil
+					}
+					return false, nil
+				},
+			},
+			"deprecationReason": &Field{
+				Type: String,
+				Resolve: func(p ResolveParams) (interface{}, error) {
+					if field, ok := p.Source.(*FieldDefinition); ok {
+						if field.DeprecationReason != "" {
+							return field.DeprecationReason, nil
+						}
+					}
+					return nil, nil
+				},
+			},
 		},
 	})
 

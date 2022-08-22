@@ -143,6 +143,8 @@ var DeprecatedDirective = NewDirective(DirectiveConfig{
 	},
 	Locations: []string{
 		DirectiveLocationFieldDefinition,
+		DirectiveLocationArgumentDefinition,
+		DirectiveLocationInputFieldDefinition,
 		DirectiveLocationEnumValue,
 	},
 })
