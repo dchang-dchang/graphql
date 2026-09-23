@@ -554,11 +554,18 @@ func defineFieldMap(ttype Named, fieldMap Fields) (FieldDefinitionMap, error) {
 			); err != nil {
 				return resultFieldMap, err
 			}
+			if arg.DeprecationReason != "" && isRequiredInputValue(arg.Type, arg.DefaultValue) {
+				return resultFieldMap, invariantf(
+					false,
+					`Required argument %v.%v(%v:) cannot be deprecated.`, ttype, fieldName, argName,
+				)
+			}
 			fieldArg := &Argument{
 				PrivateName:        argName,
 				PrivateDescription: arg.Description,
 				Type:               arg.Type,
 				DefaultValue:       arg.DefaultValue,
+				DeprecationReason:  arg.DeprecationReason,
 			}
 			fieldDef.Args = append(fieldDef.Args, fieldArg)
 		}
@@ -614,9 +621,10 @@ type Field struct {
 type FieldConfigArgument map[string]*ArgumentConfig
 
 type ArgumentConfig struct {
-	Type         Input       `json:"type"`
-	DefaultValue interface{} `json:"defaultValue"`
-	Description  string      `json:"description"`
+	Type              Input       `json:"type"`
+	DefaultValue      interface{} `json:"defaultValue"`
+	Description       string      `json:"description"`
+	DeprecationReason string      `json:"deprecationReason"`
 }
 
 type FieldDefinitionMap map[string]*FieldDefinition
@@ -642,6 +650,7 @@ type Argument struct {
 	Type               Input       `json:"type"`
 	DefaultValue       interface{} `json:"defaultValue"`
 	PrivateDescription string      `json:"description"`
+	DeprecationReason  string      `json:"deprecationReason"`
 }
 
 func (st *Argument) Name() string {
@@ -1104,15 +1113,17 @@ type InputObject struct {
 	err        error
 }
 type InputObjectFieldConfig struct {
-	Type         Input       `json:"type"`
-	DefaultValue interface{} `json:"defaultValue"`
-	Description  string      `json:"description"`
+	Type              Input       `json:"type"`
+	DefaultValue      interface{} `json:"defaultValue"`
+	Description       string      `json:"description"`
+	DeprecationReason string      `json:"deprecationReason"`
 }
 type InputObjectField struct {
 	PrivateName        string      `json:"name"`
 	Type               Input       `json:"type"`
 	DefaultValue       interface{} `json:"defaultValue"`
 	PrivateDescription string      `json:"description"`
+	DeprecationReason  string      `json:"deprecationReason"`
 }
 
 func (st *InputObjectField) Name() string {
@@ -1182,15 +1193,25 @@ func (gt *InputObject) defineFieldMap() InputObjectFieldMap {
 		); gt.err != nil {
 			return resultFieldMap
 		}
+		if fieldConfig.DeprecationReason != "" && isRequiredInputValue(fieldConfig.Type, fieldConfig.DefaultValue) {
+			gt.err = invariantf(false, `Required input field %v.%v cannot be deprecated.`, gt, fieldName)
+			return resultFieldMap
+		}
 		field := &InputObjectField{}
 		field.PrivateName = fieldName
 		field.Type = fieldConfig.Type
 		field.PrivateDescription = fieldConfig.Description
 		field.DefaultValue = fieldConfig.DefaultValue
+		field.DeprecationReason = fieldConfig.DeprecationReason
 		resultFieldMap[fieldName] = field
 	}
 	gt.init = true
 	return resultFieldMap
+}
+
+func isRequiredInputValue(inputType Input, defaultValue interface{}) bool {
+	_, isNonNull := inputType.(*NonNull)
+	return isNonNull && isNullish(defaultValue)
 }
 
 func (gt *InputObject) AddFieldConfig(fieldName string, fieldConfig *InputObjectFieldConfig) {

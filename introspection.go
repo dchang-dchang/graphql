@@ -275,6 +275,35 @@ func init() {
 					return nil, nil
 				},
 			},
+			"isDeprecated": &Field{
+				Type: NewNonNull(Boolean),
+				Resolve: func(p ResolveParams) (interface{}, error) {
+					switch inputValue := p.Source.(type) {
+					case *Argument:
+						return inputValue.DeprecationReason != "", nil
+					case *InputObjectField:
+						return inputValue.DeprecationReason != "", nil
+					default:
+						return false, nil
+					}
+				},
+			},
+			"deprecationReason": &Field{
+				Type: String,
+				Resolve: func(p ResolveParams) (interface{}, error) {
+					switch inputValue := p.Source.(type) {
+					case *Argument:
+						if inputValue.DeprecationReason != "" {
+							return inputValue.DeprecationReason, nil
+						}
+					case *InputObjectField:
+						if inputValue.DeprecationReason != "" {
+							return inputValue.DeprecationReason, nil
+						}
+					}
+					return nil, nil
+				},
+			},
 		},
 	})
 
@@ -291,9 +320,16 @@ func init() {
 			},
 			"args": &Field{
 				Type: NewNonNull(NewList(NewNonNull(InputValueType))),
+				Args: FieldConfigArgument{
+					"includeDeprecated": &ArgumentConfig{
+						Type:         Boolean,
+						DefaultValue: false,
+					},
+				},
 				Resolve: func(p ResolveParams) (interface{}, error) {
+					includeDeprecated, _ := p.Args["includeDeprecated"].(bool)
 					if field, ok := p.Source.(*FieldDefinition); ok {
-						return field.Args, nil
+						return filterDeprecatedArguments(field.Args, includeDeprecated), nil
 					}
 					return []interface{}{}, nil
 				},
@@ -348,6 +384,19 @@ func init() {
 				Type: NewNonNull(NewList(
 					NewNonNull(InputValueType),
 				)),
+				Args: FieldConfigArgument{
+					"includeDeprecated": &ArgumentConfig{
+						Type:         Boolean,
+						DefaultValue: false,
+					},
+				},
+				Resolve: func(p ResolveParams) (interface{}, error) {
+					includeDeprecated, _ := p.Args["includeDeprecated"].(bool)
+					if directive, ok := p.Source.(*Directive); ok {
+						return filterDeprecatedArguments(directive.Args, includeDeprecated), nil
+					}
+					return []*Argument{}, nil
+				},
 			},
 			// NOTE: the following three fields are deprecated and are no longer part
 			// of the GraphQL specification.
@@ -612,10 +661,20 @@ func init() {
 	})
 	TypeType.AddFieldConfig("inputFields", &Field{
 		Type: NewList(NewNonNull(InputValueType)),
+		Args: FieldConfigArgument{
+			"includeDeprecated": &ArgumentConfig{
+				Type:         Boolean,
+				DefaultValue: false,
+			},
+		},
 		Resolve: func(p ResolveParams) (interface{}, error) {
+			includeDeprecated, _ := p.Args["includeDeprecated"].(bool)
 			if ttype, ok := p.Source.(*InputObject); ok {
-				fields := []*InputObjectField{}
+				fields := make([]*InputObjectField, 0, len(ttype.Fields()))
 				for _, field := range ttype.Fields() {
+					if !includeDeprecated && field.DeprecationReason != "" {
+						continue
+					}
 					fields = append(fields, field)
 				}
 				return fields, nil
@@ -674,6 +733,19 @@ func init() {
 		},
 	}
 
+}
+
+func filterDeprecatedArguments(args []*Argument, includeDeprecated bool) []*Argument {
+	if includeDeprecated {
+		return args
+	}
+	visibleArgs := make([]*Argument, 0, len(args))
+	for _, arg := range args {
+		if arg.DeprecationReason == "" {
+			visibleArgs = append(visibleArgs, arg)
+		}
+	}
+	return visibleArgs
 }
 
 // Produces a GraphQL Value AST given a Golang value.

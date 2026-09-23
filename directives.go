@@ -82,7 +82,12 @@ func NewDirective(config DirectiveConfig) *Directive {
 			PrivateDescription: argConfig.Description,
 			Type:               argConfig.Type,
 			DefaultValue:       argConfig.DefaultValue,
+			DeprecationReason:  argConfig.DeprecationReason,
 		})
+		if argConfig.DeprecationReason != "" && isRequiredInputValue(argConfig.Type, argConfig.DefaultValue) {
+			dir.err = invariantf(false, `Required argument @%v(%v:) cannot be deprecated.`, config.Name, argName)
+			return dir
+		}
 	}
 
 	dir.Name = config.Name
@@ -143,6 +148,8 @@ var DeprecatedDirective = NewDirective(DirectiveConfig{
 	},
 	Locations: []string{
 		DirectiveLocationFieldDefinition,
+		DirectiveLocationArgumentDefinition,
+		DirectiveLocationInputFieldDefinition,
 		DirectiveLocationEnumValue,
 	},
 })
